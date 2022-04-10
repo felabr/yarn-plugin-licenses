@@ -13,8 +13,22 @@ export const getPackagePath = async (project: Project, pkg: Package): Promise<Po
   await makeYarnState(project)
 
   const locator = structUtils.convertPackageToLocator(pkg)
-  const entry = yarnState[structUtils.stringifyLocator(locator)]
-  if (!entry) return null
+  let entry = yarnState[structUtils.stringifyLocator(locator)]
+  if (!entry) {
+    console.log('getPackagePath entry lookup failed...');
+    console.log('looking for:', structUtils.stringifyLocator(locator));
+    const nameWithScope = locator.scope ? `@${locator.scope}/${locator.name}`: locator.name;
+    const version = locator.reference.slice(locator.reference.lastIndexOf(':'));
+    const keysInState = Object.keys(yarnState).filter(key => key.startsWith(nameWithScope) && key.endsWith(version));
+    console.log('found these in the yarnState:', keysInState);
+    const key = Object.keys(yarnState).find(key => key.startsWith(nameWithScope) && key.endsWith(version));
+    console.log('using this one instead:', key);
+    if (!key) {
+      console.log('nothing found');
+      return null;
+    }
+    entry = yarnState[key];
+  }
 
   const location = entry.locations[0]
   return location ? ppath.join(project.cwd, location) : project.cwd

@@ -137,16 +137,34 @@ export const getSortedPackages = async (
     storedDescriptors = project.storedDescriptors.values()
   } else {
     storedDescriptors = project.workspaces.flatMap((workspace) => {
+      console.log('workspace');
+      console.log('locator', workspace.locator);
+      console.log('anchoredDescriptor', workspace.anchoredDescriptor);
+      console.log('anchoredLocator', workspace.anchoredLocator);
       const dependencies = [workspace.anchoredDescriptor]
       for (const [identHash, dependency] of workspace.dependencies.entries()) {
         if (production && workspace.manifest.devDependencies.has(identHash)) {
           continue
         }
-        dependencies.push(dependency)
+        dependencies.push(dependency);
+        if (dependency.name === 'babel-loader') {
+          console.log('babel-loader found');
+          console.log('identHash', identHash);
+          console.log('dependency', dependency);
+        }
+        if (identHash === '8377c7f4f64ffe06a1668228994fa59ba1a11017a30f97d8d045f4f352c3f84c5d34f0f4c27b081ec27424c0c8d319af10d2acf475b2e74125931254af1753b4'
+          || dependency.descriptorHash === '8377c7f4f64ffe06a1668228994fa59ba1a11017a30f97d8d045f4f352c3f84c5d34f0f4c27b081ec27424c0c8d319af10d2acf475b2e74125931254af1753b4'
+          || dependency.range.startsWith('virtual:8377c7f4f64ffe06a1668228994fa59ba1a11017a30f97d8d045f4f352c3f84c5d34f0f4c27b081ec27424c0c8d319af10d2acf475b2e74125931254af1753b4')) {
+            console.log("babel loader's yarnState hash found");
+            console.log('identHash', identHash);
+            console.log('dependency', dependency);
+          }
       }
       return dependencies
     })
   }
+
+  console.log('project storedDescriptors', storedDescriptors.filter((descriptor) => descriptor.name === 'babel-loader'));
 
   const sortedDescriptors = miscUtils.sortMap(storedDescriptors, [
     (descriptor) => structUtils.stringifyIdent(descriptor),
@@ -161,7 +179,14 @@ export const getSortedPackages = async (
     const identHash = project.storedResolutions.get(descriptor.descriptorHash)
     if (!identHash) continue
     const pkg = project.storedPackages.get(identHash)
+
     if (!pkg) continue
+
+    if (pkg.name === 'babel-loader') {
+      console.log('identHash', pkg.identHash);
+      console.log('locatorHash', pkg.locatorHash);
+      console.log('reference', pkg.reference);
+    }
 
     const { descriptorHash } = structUtils.isVirtualDescriptor(descriptor)
       ? structUtils.devirtualizeDescriptor(descriptor)
@@ -175,6 +200,38 @@ export const getSortedPackages = async (
   return packages
 }
 
+type Author = {name?: string; email?: string; url?: string}
+
+/**
+ * Get author information from a manifest's author string
+ *
+ * @param {string} author - format: "name (url) <email>"
+ * @returns {Author} parsed author information
+ */
+export function parseAuthor(author: string) {
+  const result: Author = {}
+
+  const nameMatch = author.match(/^([^(<]+)/)
+  if (nameMatch) {
+    const name = nameMatch[0].trim()
+    if (name) {
+      result.name = name
+    }
+  }
+
+  const emailMatch = author.match(/<([^>]+)>/)
+  if (emailMatch) {
+    result.email = emailMatch[1]
+  }
+
+  const urlMatch = author.match(/\(([^)]+)\)/)
+  if (urlMatch) {
+    result.url = urlMatch[1]
+  }
+
+  return result
+}
+
 /**
  * Get license information from a manifest
  *
@@ -183,6 +240,8 @@ export const getSortedPackages = async (
  */
 export const getLicenseInfoFromManifest = (manifest: ManifestWithLicenseInfo): LicenseInfo => {
   const { license, licenses, repository, homepage, author } = manifest
+
+  const vendor = typeof author === 'string' ? parseAuthor(author) : author
 
   const getNormalizedLicense = () => {
     if (license) {
@@ -205,8 +264,8 @@ export const getLicenseInfoFromManifest = (manifest: ManifestWithLicenseInfo): L
   return {
     license: getNormalizedLicense(),
     url: repository?.url || homepage,
-    vendorName: author?.name,
-    vendorUrl: homepage || author?.url
+    vendorName: vendor?.name,
+    vendorUrl: homepage || vendor?.url
   }
 }
 
